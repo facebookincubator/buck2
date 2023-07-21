@@ -45,15 +45,46 @@ pub trait AsHttpError {
     fn as_http_error(&self) -> Option<&HttpError>;
 }
 
-pub async fn http_retry<Exec, F, T, E>(exec: Exec, mut intervals: Vec<Duration>) -> Result<T, E>
+/// Used to dispatch warnings to the event log in the case in the case of a
+/// retryable HTTP error. This often occurs when some level of exponential
+/// backoff is happening due to a lot of concurrent http_archive() requests for
+/// a single host; see GH-316 and GH-321 for background.
+pub trait DispatchableHttpRetryWarning {
+    /// Fire off a warning. This might go to the console, event log, or
+    /// some other place.
+    fn dispatch(&self, dur: &Duration, retries: usize, url: &str);
+}
+
+/// No-op implementation of DispatchableHttpRetryWarning. This does nothing at
+/// all when a retry occurs; useful for mock tests.
+pub struct NoopDispatchableHttpRetryWarning {}
+
+impl NoopDispatchableHttpRetryWarning {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl DispatchableHttpRetryWarning for NoopDispatchableHttpRetryWarning {
+    fn dispatch(&self, _backoff: &Duration, _retries: usize, _url: &str) {}
+}
+
+pub async fn http_retry<Exec, F, T, E, R>(
+    url: &str,
+    dispatch_retry_warning: R,
+    exec: Exec,
+    mut intervals: Vec<Duration>,
+) -> Result<T, E>
 where
     Exec: Fn() -> F,
     E: AsHttpError + std::fmt::Display,
     F: Future<Output = Result<T, E>>,
+    R: DispatchableHttpRetryWarning,
 {
     intervals.insert(0, Duration::from_secs(0));
     let mut backoff = intervals.into_iter().peekable();
 
+    let mut retries = 0;
     while let Some(duration) = backoff.next() {
         tokio::time::sleep(duration).await;
 
@@ -63,12 +94,9 @@ where
 
         if let Some(http_error) = http_error {
             if http_error.is_retryable() {
+                retries += 1;
                 if let Some(b) = backoff.peek() {
-                    tracing::warn!(
-                        "Retrying a HTTP error after {} seconds: {:#}",
-                        b.as_secs(),
-                        http_error
-                    );
+                    dispatch_retry_warning.dispatch(&b, retries, url);
                     continue;
                 }
             }
@@ -143,29 +171,37 @@ mod tests {
 
     #[tokio::test]
     async fn test_http_retry_success() {
+        let url = "http://example.com";
+        let dispatch_retry_warning = NoopDispatchableHttpRetryWarning::new();
         let mock = Mock::new(vec![ok_response()]);
-        let result = http_retry(|| mock.exec(), retries(0)).await;
+        let result = http_retry(url, dispatch_retry_warning, || mock.exec(), retries(0)).await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_http_retry_retryable() {
+        let url = "http://example.com";
+        let dispatch_retry_warning = NoopDispatchableHttpRetryWarning::new();
         let mock = Mock::new(vec![retryable(), ok_response()]);
-        let result = http_retry(|| mock.exec(), retries(1)).await;
+        let result = http_retry(url, dispatch_retry_warning, || mock.exec(), retries(1)).await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_http_retry_exhaust_retries() {
+        let url = "http://example.com";
+        let dispatch_retry_warning = NoopDispatchableHttpRetryWarning::new();
         let mock = Mock::new(vec![retryable(), ok_response()]);
-        let result = http_retry(|| mock.exec(), retries(0)).await;
+        let result = http_retry(url, dispatch_retry_warning, || mock.exec(), retries(0)).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_http_retry_non_retryable() {
+        let url = "http://example.com";
+        let dispatch_retry_warning = NoopDispatchableHttpRetryWarning::new();
         let mock = Mock::new(vec![non_retryable(), ok_response()]);
-        let result = http_retry(|| mock.exec(), retries(1)).await;
+        let result = http_retry(url, dispatch_retry_warning, || mock.exec(), retries(1)).await;
         assert!(result.is_err());
     }
 }

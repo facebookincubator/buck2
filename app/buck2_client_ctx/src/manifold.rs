@@ -21,6 +21,7 @@ use buck2_common::http::counting_client::CountingHttpClient;
 use buck2_common::http::find_certs::find_tls_cert;
 use buck2_common::http::retries::http_retry;
 use buck2_common::http::retries::AsHttpError;
+use buck2_common::http::retries::DispatchableHttpRetryWarning;
 use buck2_common::http::retries::HttpError;
 use buck2_common::http::HttpClient;
 use buck2_core::fs::paths::abs_path::AbsPath;
@@ -428,6 +429,25 @@ pub struct ManifoldClient {
     manifold_url: Option<String>,
 }
 
+struct ManifoldDispatchableHttpRetryWarning {}
+
+impl ManifoldDispatchableHttpRetryWarning {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl DispatchableHttpRetryWarning for ManifoldDispatchableHttpRetryWarning {
+    fn dispatch(&self, backoff: &Duration, retries: usize, url: &str) {
+        tracing::warn!(
+            "HTTP request to {} failed; {} retries. Retrying in {} seconds",
+            url,
+            retries,
+            &backoff.as_secs(),
+        );
+    }
+}
+
 impl ManifoldClient {
     pub fn new() -> anyhow::Result<Self> {
         Ok(Self {
@@ -467,6 +487,8 @@ impl ManifoldClient {
         }
 
         let res = http_retry(
+            &url,
+            ManifoldDispatchableHttpRetryWarning::new(),
             || async {
                 self.client
                     .put(&url, buf.clone(), headers.clone())
@@ -499,6 +521,8 @@ impl ManifoldClient {
         );
 
         let res = http_retry(
+            &url,
+            ManifoldDispatchableHttpRetryWarning::new(),
             || async {
                 self.client
                     .post(&url, buf.clone(), vec![])
