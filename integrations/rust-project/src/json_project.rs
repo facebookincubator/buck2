@@ -15,6 +15,7 @@
 //!
 //! [documentation]: https://rust-analyzer.github.io/manual.html#non-cargo-based-projects
 
+use std::path::Path;
 use std::path::PathBuf;
 
 use rustc_hash::FxHashMap;
@@ -247,19 +248,14 @@ pub(crate) struct Sysroot {
     /// if you do not provide a value. So we will always provide one.
     pub(crate) sysroot_src: PathBuf,
 }
-
 impl Sysroot {
-    pub(crate) fn with_default_sysroot_src(sysroot: PathBuf) -> Self {
-        let mut sysroot_src = sysroot.clone();
+    pub(crate) fn sysroot_src_for_sysroot(sysroot: &Path) -> PathBuf {
+        let mut sysroot_src = sysroot.to_owned();
         sysroot_src.push("lib");
         sysroot_src.push("rustlib");
         sysroot_src.push("src");
         sysroot_src.push("rust");
         sysroot_src.push("library");
-
-        Self {
-            sysroot_src,
-            sysroot,
-        }
+        sysroot_src
     }
 }
