@@ -261,10 +261,7 @@ impl Develop {
                     sysroot_path = relative_to(&sysroot_path, &project_root);
                 }
 
-                Sysroot {
-                    sysroot: sysroot_path,
-                    sysroot_src: None,
-                }
+                Sysroot::with_default_sysroot_src(sysroot_path)
             }
             SysrootConfig::BuckConfig => {
                 resolve_buckconfig_sysroot(&project_root, *relative_paths)?

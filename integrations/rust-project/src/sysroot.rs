@@ -61,7 +61,7 @@ pub(crate) fn resolve_buckconfig_sysroot(
         // buck2 run fbcode//third-party-buck/platform010/build/rust:bin/rustc -- --print sysroot
         let sysroot = Sysroot {
             sysroot: base.join("fbcode/third-party-buck/platform010/build/rust/llvm-fb-15"),
-            sysroot_src: Some(sysroot_src),
+            sysroot_src,
         };
 
         return Ok(sysroot);
@@ -95,7 +95,7 @@ pub(crate) fn resolve_buckconfig_sysroot(
 
     let sysroot = Sysroot {
         sysroot,
-        sysroot_src: Some(sysroot_src),
+        sysroot_src,
     };
 
     Ok(sysroot)
@@ -111,17 +111,7 @@ pub(crate) fn resolve_rustup_sysroot() -> Result<Sysroot, anyhow::Error> {
 
     let mut output = utf8_output(cmd.output(), &cmd)?;
     truncate_line_ending(&mut output);
-    let sysroot = PathBuf::from(output);
-    let sysroot_src = sysroot
-        .join("lib")
-        .join("rustlib")
-        .join("src")
-        .join("rust")
-        .join("library");
-
-    let sysroot = Sysroot {
-        sysroot,
-        sysroot_src: Some(sysroot_src),
-    };
+    let sysroot_path = PathBuf::from(output);
+    let sysroot = Sysroot::with_default_sysroot_src(sysroot_path);
     Ok(sysroot)
 }

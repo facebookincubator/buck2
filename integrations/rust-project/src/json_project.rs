@@ -218,7 +218,7 @@ pub(crate) struct Dep {
 ///
 /// <https://rust-analyzer.github.io/manual.html#non-cargo-based-projects>
 ///
-/// rust-analyzer treats both paths as optional, but we always provide sysroot.
+/// rust-analyzer treats both paths as optional, but we always provide both.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Sysroot {
     /// Path to the directory of the sysroot; this is a superset of `sysroot_src`.
@@ -239,6 +239,27 @@ pub(crate) struct Sysroot {
     ///
     /// Inside Meta, this is necessary on non-Linux platforms since the sources
     /// are packaged seperately from binaries such as `rust-analyzer-proc-macro-srv`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) sysroot_src: Option<PathBuf>,
+    //
+    /// rust-analyzer's documentation says it will only auto-add a dependency on
+    /// std/core to crates if sysroot_src is supplied.
+    /// It also claims that `${sysroot}/lib/rustlib/src/rust/library` is the
+    /// default value. But it fails to add `std` and `core` as dependencies
+    /// if you do not provide a value. So we will always provide one.
+    pub(crate) sysroot_src: PathBuf,
+}
+
+impl Sysroot {
+    pub(crate) fn with_default_sysroot_src(sysroot: PathBuf) -> Self {
+        let mut sysroot_src = sysroot.clone();
+        sysroot_src.push("lib");
+        sysroot_src.push("rustlib");
+        sysroot_src.push("src");
+        sysroot_src.push("rust");
+        sysroot_src.push("library");
+
+        Self {
+            sysroot_src,
+            sysroot,
+        }
+    }
 }
