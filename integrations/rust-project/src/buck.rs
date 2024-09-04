@@ -195,10 +195,35 @@ pub(crate) fn to_json_project(
         check_cycles_in_crate_graph(&crates);
     }
 
-    let jp = JsonProject {
-        sysroot,
-        crates,
-        runnables: vec![
+    let mut runnables = vec![
+        Runnable {
+            kind: RunnableKind::Flycheck,
+            program: "rust-project".to_owned(),
+            args: {
+                let mut args = vec!["check".to_owned(), "{label}".to_owned()];
+                if !use_clippy {
+                    args.push("--use-clippy".to_owned());
+                    args.push("false".to_owned());
+                }
+                args
+            },
+            cwd: project_root.clone(),
+        },
+        Runnable {
+            kind: RunnableKind::Run,
+            program: "buck2".to_string(),
+            args: vec![
+                "run".to_owned(),
+                "-c=client.id=rust-project".to_owned(),
+                "{label}".to_string(),
+            ],
+            cwd: project_root.clone(),
+        },
+    ];
+
+    #[cfg(fbcode_build)]
+    {
+        runnables.extend([
             Runnable {
                 program: "buck".to_owned(),
                 args: vec![
@@ -220,52 +245,48 @@ pub(crate) fn to_json_project(
                     "--print-passing-details".to_owned(),
                 ],
                 cwd: project_root.to_owned(),
-                kind: RunnableKind::TestOne,
             },
-            Runnable {
-                kind: RunnableKind::Flycheck,
-                program: "rust-project".to_owned(),
-                args: {
-                    let mut args = vec!["check".to_owned(), "{label}".to_owned()];
-                    if !use_clippy {
-                        args.push("--use-clippy".to_owned());
-                        args.push("false".to_owned());
-                    }
-                    args
-                },
-                cwd: project_root.clone(),
-            },
-            Runnable {
-                kind: RunnableKind::Run,
-                program: "buck2".to_string(),
-                args: vec!["run".to_owned(), "{label}".to_string()],
-                cwd: project_root.clone(),
-            },
+        ]);
+    }
+
+    // OSS `buck2 test` supports different args, chiefly --test-arg
+    //
+    #[cfg(not(fbcode_build))]
+    {
+        runnables.extend([
+            #[cfg(not(fbcode_build))]
             Runnable {
                 kind: RunnableKind::TestOne,
                 program: "buck2".to_string(),
                 args: vec![
                     "test".to_owned(),
+                    "-c=client.id=rust-project".to_owned(),
                     "{label}".to_owned(),
                     "--".to_owned(),
-                    // R-A substitutes $$TEST_NAME$$ with e.g. `mycrate::tests::one`
+                    // R-A substitutes {test_id} with e.g. `mycrate::tests::one`
                     // --test-arg tells `buck2 test` to pass that string through to
                     // the test program, which we will assume to be the rust test
-                    // harness.
-                    // Same overall effect as `cargo test -- mycrate::tests::one`,
+                    // harness. Same overall effect as `cargo test -- mycrate::tests::one`,
                     //
                     // But this is a bit less than ideal, because buck will build
                     // all of the related test binaries, including integration tests.
                     // We don't know your naming conventions for library tests.
                     // You might have a rust_test target named `mycrate-test`. So
                     // we might need a way (probably buck metadata in the library
-                    // target) to tell rust-project about these.
+                    // target, or just querying the related tests)
+                    // to tell rust-project about these.
                     "--test-arg".to_owned(),
                     "{test_id}".to_owned(),
                 ],
                 cwd: project_root.clone(),
             },
-        ],
+        ]);
+    }
+
+    let jp = JsonProject {
+        sysroot,
+        crates,
+        runnables,
         // needed to ignore the generated `rust-project.json` in diffs, but including the actual
         // string will mark this file as generated
         generated: String::from("\x40generated"),
@@ -632,7 +653,7 @@ impl Buck {
         if let Some(parent_dir) = saved_file.parent() {
             command.current_dir(parent_dir);
         }
-        
+
         tracing::debug!(?command, "running bxl");
 
         let output = command.output();
