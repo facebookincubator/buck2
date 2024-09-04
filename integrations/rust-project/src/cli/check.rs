@@ -8,7 +8,6 @@
  */
 
 use std::path::Path;
-use std::path::PathBuf;
 use std::str::FromStr;
 
 use tracing::info;
@@ -17,34 +16,31 @@ use tracing::instrument;
 use crate::buck;
 use crate::buck::select_mode;
 use crate::diagnostics;
-use crate::path::canonicalize;
 
 pub(crate) struct Check {
     pub(crate) buck: buck::Buck,
     pub(crate) use_clippy: bool,
-    pub(crate) saved_file: PathBuf,
+    pub(crate) target: String,
 }
 
 impl Check {
-    pub(crate) fn new(mode: Option<String>, use_clippy: bool, saved_file: PathBuf) -> Self {
-        let saved_file = canonicalize(&saved_file).unwrap_or(saved_file);
-
+    pub(crate) fn new(mode: Option<String>, use_clippy: bool, target: String) -> Self {
         let mode = select_mode(mode.as_deref());
         let buck = buck::Buck::new(mode);
         Self {
             buck,
             use_clippy,
-            saved_file,
+            target,
         }
     }
 
-    #[instrument(name = "check", skip_all, fields(saved_file = %self.saved_file.display()))]
+    #[instrument(name = "check", skip_all, fields(target = %self.target))]
     pub(crate) fn run(&self) -> Result<(), anyhow::Error> {
         let start = std::time::Instant::now();
         let buck = &self.buck;
 
-        let cell_root = buck.resolve_root_of_file(&self.saved_file)?;
-        let diagnostic_files = buck.check_saved_file(self.use_clippy, &self.saved_file)?;
+        let cell_root = buck.resolve_target_cell_root(&self.target)?;
+        let diagnostic_files = buck.check_target(self.use_clippy, &self.target)?;
 
         let mut diagnostics = vec![];
         for path in diagnostic_files {

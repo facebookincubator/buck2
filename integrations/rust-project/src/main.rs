@@ -139,8 +139,7 @@ enum Command {
         mode: Option<String>,
         #[clap(short = 'c', long, default_value = "true", action = ArgAction::Set)]
         use_clippy: bool,
-        /// The file saved by the user. `rust-project` will infer the owning target(s) of the saved file and build them.
-        saved_file: PathBuf,
+        target: String,
         /// Write Scuba sample to stdout.
         #[clap(long, hide = true)]
         log_scuba_to_stdout: bool,
@@ -285,14 +284,14 @@ fn main() -> Result<(), anyhow::Error> {
         Command::Check {
             mode,
             use_clippy,
-            saved_file,
+            target,
             log_scuba_to_stdout,
         } => {
             let subscriber = tracing_subscriber::registry()
                 .with(fmt.with_filter(filter))
                 .with(scuba::ScubaLayer::new(log_scuba_to_stdout));
             tracing::subscriber::set_global_default(subscriber)?;
-            cli::Check::new(mode, use_clippy, saved_file).run()
+            cli::Check::new(mode, use_clippy, target).run()
         }
     }
 }

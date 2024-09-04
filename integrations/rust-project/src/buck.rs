@@ -94,7 +94,7 @@ pub(crate) fn to_json_project(
 
     let mut crates: Vec<Crate> = Vec::with_capacity(targets_vec.len());
     for target in &targets_vec {
-        let info = target_index.get(&target).unwrap();
+        let info = target_index.get(target).unwrap();
 
         let dep_targets = resolve_aliases(&info.deps, &aliases, &proc_macros);
         let deps = as_deps(&dep_targets, info, &targets_to_ids, &target_index);
@@ -485,6 +485,24 @@ impl Buck {
         cmd
     }
 
+    /// Return the absolute path of the CELL root for a given buck target label
+    pub(crate) fn resolve_target_cell_root(&self, label: &str) -> Result<PathBuf, anyhow::Error> {
+        let (cell, _path) = label
+            .split_once("//")
+            .unwrap_or(("root", label.trim_start_matches("//")));
+
+        let mut command = self.command_without_config(["audit", "cell", "--paths-only", cell]);
+
+        let mut stdout = utf8_output(command.output(), &command)?;
+        truncate_line_ending(&mut stdout);
+
+        if enabled!(Level::TRACE) {
+            trace!(%stdout, target=%label, cell=%cell, "got cell root from buck");
+        }
+
+        Ok(stdout.into())
+    }
+
     /// Return the absolute path of the current Buck project root.
     pub(crate) fn resolve_project_root(&self) -> Result<PathBuf, anyhow::Error> {
         let mut command = self.command_without_config(["root"]);
@@ -558,17 +576,10 @@ impl Buck {
 
         command.arg("prelude//rust/rust-analyzer/check.bxl:check");
 
-        let mut file_path = saved_file.to_owned();
-        if !file_path.is_absolute() {
-            if let Ok(cwd) = std::env::current_dir() {
-                file_path = cwd.join(saved_file);
-            }
-        }
-
         // apply BXL scripts-specific arguments:
-        command.args(["--", "--file"]);
-        command.arg(file_path.as_os_str());
-
+        command.arg("--");
+        command.args(["--file"]);
+        command.arg(saved_file.as_os_str());
         command.args(["--use-clippy", &use_clippy.to_string()]);
 
         // Set working directory to the containing directory of the target file.
@@ -586,6 +597,32 @@ impl Buck {
         Ok(files)
     }
 
+    #[instrument(fields(use_clippy, target = %target))]
+    pub(crate) fn check_target(
+        &self,
+        use_clippy: bool,
+        target: &str,
+    ) -> Result<Vec<PathBuf>, anyhow::Error> {
+        let mut command = self.command(["bxl"]);
+
+        if let Some(mode) = &self.mode {
+            command.arg(mode);
+        }
+
+        command.arg("prelude//rust/rust-analyzer/check.bxl:check");
+
+        command.arg("--");
+        command.arg("--target");
+        command.arg(target);
+        command.args(["--use-clippy", &use_clippy.to_string()]);
+
+        tracing::debug!(?command, "running bxl");
+
+        let output = command.output();
+
+        let files = deserialize_output(output, &command)?;
+        Ok(files)
+    }
     #[instrument(skip_all)]
     pub(crate) fn expand_and_resolve(
         &self,
