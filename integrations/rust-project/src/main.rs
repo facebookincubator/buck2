@@ -108,6 +108,11 @@ enum Command {
         #[clap(short = 'm', long)]
         mode: Option<String>,
 
+        /// Enables clippy in the flycheck commands in `rust-project.json`
+        /// Default is true, pass `--use-clippy false` to disable
+        #[clap(short = 'c', long, default_value = "true", action = ArgAction::Set)]
+        use_clippy: bool,
+
         /// Write Scuba sample to stdout.
         #[clap(long, hide = true)]
         log_scuba_to_stdout: bool,
@@ -130,6 +135,11 @@ enum Command {
         #[clap(long, default_value = "rustc")]
         sysroot_mode: SysrootMode,
 
+        /// Enables clippy in the flycheck commands in `rust-project.json`
+        /// Default is true, pass `--use-clippy false` to disable
+        #[clap(short = 'c', long, default_value = "true", action = ArgAction::Set)]
+        use_clippy: bool,
+
         args: JsonArguments,
     },
     /// Build the saved file's owning target. This is meant to be used by IDEs to provide diagnostics on save.
@@ -137,6 +147,8 @@ enum Command {
         /// Optional argument specifying build mode.
         #[clap(short = 'm', long)]
         mode: Option<String>,
+        /// Enables clippy in the flycheck commands in `rust-project.json`
+        /// Default is true, pass `--use-clippy false` to disable
         #[clap(short = 'c', long, default_value = "true", action = ArgAction::Set)]
         use_clippy: bool,
         target: String,

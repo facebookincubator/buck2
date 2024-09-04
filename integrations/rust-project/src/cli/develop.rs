@@ -40,6 +40,7 @@ pub(crate) struct Develop {
     pub(crate) buck: buck::Buck,
     pub(crate) check_cycles: bool,
     pub(crate) invoked_by_ra: bool,
+    pub(crate) use_clippy: bool,
 }
 
 pub(crate) struct OutputCfg {
@@ -67,6 +68,7 @@ impl Develop {
             mode,
             check_cycles,
             log_scuba_to_stdout: _,
+            use_clippy,
         } = command
         {
             let out = if stdout {
@@ -92,6 +94,7 @@ impl Develop {
                 buck,
                 check_cycles,
                 invoked_by_ra: false,
+                use_clippy,
             };
             let out = OutputCfg { out, pretty };
 
@@ -109,6 +112,7 @@ impl Develop {
             sysroot_mode,
             args,
             log_scuba_to_stdout: _,
+            use_clippy,
         } = command
         {
             let out = Output::Stdout;
@@ -135,6 +139,7 @@ impl Develop {
                 buck,
                 check_cycles: false,
                 invoked_by_ra: true,
+                use_clippy,
             };
             let out = OutputCfg { out, pretty: false };
 
@@ -233,6 +238,7 @@ impl Develop {
             relative_paths,
             buck,
             check_cycles,
+            use_clippy,
             ..
         } = self;
 
@@ -272,6 +278,7 @@ impl Develop {
             aliased_libraries,
             *relative_paths,
             *check_cycles,
+            *use_clippy,
         )?;
 
         let duration = start.elapsed();
