@@ -14,6 +14,7 @@ def check_targets_impl(ctx: bxl.Context) -> None:
     nodes = ctx.cquery().kind("^(rust_binary|rust_library|rust_test)$", owners)
 
     if len(nodes) == 0:
+        ctx.output.print_json([])
         return
 
     analysis = ctx.analysis(nodes).values()

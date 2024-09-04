@@ -577,13 +577,10 @@ impl Buck {
         if let Some(parent_dir) = saved_file.parent() {
             command.current_dir(parent_dir);
         }
+        
+        tracing::debug!(?command, "running bxl");
 
         let output = command.output();
-        if let Ok(output) = &output {
-            if output.stdout.is_empty() {
-                return Ok(vec![]);
-            }
-        }
 
         let files = deserialize_output(output, &command)?;
         Ok(files)
@@ -611,6 +608,9 @@ impl Buck {
             "--targets",
         ]);
         command.args(targets);
+
+        tracing::debug!(?command, "running bxl");
+
         deserialize_output(command.output(), &command)
     }
 
